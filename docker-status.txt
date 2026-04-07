@@ -1,0 +1,15 @@
+Docker status check
+===================
+
+Client: Docker Engine - Community
+Version: 28.0.2
+
+Result:
+- Docker CLI is installed, but Docker daemon was not reachable at:
+  unix:///Users/gdullas/.docker/run/docker.sock
+
+Action needed to run container test locally:
+- Start Docker Desktop (or your Docker daemon), then re-run:
+  docker build -t secure-app:local .
+  docker run --rm -p 8080:8080 secure-app:local
+

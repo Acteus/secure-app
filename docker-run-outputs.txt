@@ -1,0 +1,74 @@
+Docker run verification (build + run + curl)
+============================================
+
+Date: 2026-04-07
+
+1) Build image
+--------------
+docker build -t secure-app:local .
+Result: SUCCESS
+
+(Build output was lengthy; key proof points)
+- Base image: gcr.io/distroless/python3-debian12:nonroot
+- Installed deps into /opt/python (PYTHONPATH=/opt/python)
+- Tagged image: secure-app:local
+
+2) Run container
+----------------
+docker run --rm -p 8080:8080 --name secure-app-local secure-app:local
+
+[2026-04-07 12:52:46 +0000] [1] [INFO] Starting gunicorn 22.0.0
+[2026-04-07 12:52:46 +0000] [1] [INFO] Listening at: http://0.0.0.0:8080 (1)
+[2026-04-07 12:52:46 +0000] [1] [INFO] Using worker: sync
+[2026-04-07 12:52:46 +0000] [8] [INFO] Booting worker with pid: 8
+[2026-04-07 12:52:46 +0000] [9] [INFO] Booting worker with pid: 9
+
+3) Endpoint checks from host
+----------------------------
+
+GET http://127.0.0.1:8080/healthz
+HTTP/1.1 200 OK
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"status":"ok"}
+
+POST http://127.0.0.1:8080/v1/echo (Content-Type: application/json)
+Body: {"message":"  hello  "}
+HTTP/1.1 200 OK
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"message":"hello"}
+
+POST http://127.0.0.1:8080/v1/echo (Content-Type: text/plain)
+Body: nope
+HTTP/1.1 415 UNSUPPORTED MEDIA TYPE
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"error":"content_type_must_be_application_json"}
+
+4) Stop container
+-----------------
+docker stop secure-app-local
+secure-app-local
+
+Gunicorn shutdown:
+[2026-04-07 12:52:56 +0000] [1] [INFO] Handling signal: term
+[2026-04-07 12:52:56 +0000] [8] [INFO] Worker exiting (pid: 8)
+[2026-04-07 12:52:56 +0000] [9] [INFO] Worker exiting (pid: 9)
+[2026-04-07 12:52:56 +0000] [1] [INFO] Shutting down: Master
+

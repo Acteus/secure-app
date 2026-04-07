@@ -1,0 +1,49 @@
+Local run verification (Gunicorn + curl)
+=======================================
+
+Date: 2026-04-07
+
+1) Start server
+--------------
+[2026-04-07 20:25:40 +0800] [43141] [INFO] Starting gunicorn 22.0.0
+[2026-04-07 20:25:40 +0800] [43141] [INFO] Listening at: http://127.0.0.1:8080 (43141)
+[2026-04-07 20:25:40 +0800] [43141] [INFO] Using worker: sync
+[2026-04-07 20:25:40 +0800] [43142] [INFO] Booting worker with pid: 43142
+[2026-04-07 20:25:40 +0800] [43143] [INFO] Booting worker with pid: 43143
+
+2) GET /healthz
+---------------
+HTTP/1.1 200 OK
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"status":"ok"}
+
+3) POST /v1/echo (valid JSON)
+-----------------------------
+HTTP/1.1 200 OK
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"message":"hello"}
+
+4) POST /v1/echo (wrong content-type)
+-------------------------------------
+HTTP/1.1 415 UNSUPPORTED MEDIA TYPE
+Server: gunicorn
+Content-Type: application/json
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'none'
+
+{"error":"content_type_must_be_application_json"}
+

@@ -1,0 +1,6 @@
+Unit test output
+================
+
+....                                                                     [100%]
+4 passed in 0.19s
+
