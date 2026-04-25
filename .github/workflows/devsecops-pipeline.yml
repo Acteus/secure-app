@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+env:
+  IMAGE_TAG: secure-app:${{ github.sha }}
+  IMAGE_TAR: secure-app-${{ github.sha }}.tar
+
 jobs:
   dependency-scan:
     name: Dependency vulnerability scan (pip-audit)
@@ -61,7 +65,13 @@ jobs:
       - name: Run SAST and create report
         run: |
           mkdir -p artifacts
+          set +e
           bandit -r app -f json -o artifacts/sast-bandit.json
+          bandit_exit=$?
+          set -e
+          if [ "$bandit_exit" -gt 1 ]; then
+            exit "$bandit_exit"
+          fi
           bandit -r app -lll -f txt -o artifacts/sast-summary.txt
       - name: Upload SAST artifacts
         if: always()
@@ -109,6 +119,7 @@ jobs:
   unit-tests:
     name: Unit tests (pytest)
     runs-on: ubuntu-latest
+    needs: [dependency-scan, sast-scan, secret-scan]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -130,6 +141,8 @@ jobs:
     needs: [dependency-scan, sast-scan, secret-scan, unit-tests]
     steps:
       - uses: actions/checkout@v4
+      - name: Create artifact directory
+        run: mkdir -p artifacts
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build container image
@@ -137,19 +150,18 @@ jobs:
         with:
           context: .
           push: false
-          tags: secure-app:${{ github.sha }}
-          outputs: type=docker,dest=/tmp/secure-app-${{ github.sha }}.tar
+          tags: ${{ env.IMAGE_TAG }}
+          outputs: type=docker,dest=artifacts/${{ env.IMAGE_TAR }}
 
       - name: Prepare image metadata
         run: |
-          mkdir -p artifacts
-          printf "secure-app:%s\n" "${GITHUB_SHA}" > artifacts/image-identifier.txt
+          printf "%s\n" "${IMAGE_TAG}" > artifacts/image-identifier.txt
       - name: Upload image build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: image-build-${{ github.sha }}
           path: |
-            /tmp/secure-app-${{ github.sha }}.tar
+            artifacts/${{ env.IMAGE_TAR }}
             artifacts/image-identifier.txt
 
   container-security:
@@ -166,11 +178,11 @@ jobs:
         uses: aquasecurity/setup-trivy@v0.2.2
       - name: Load image from build artifact
         run: |
-          docker load --input /tmp/image-build/secure-app-${{ github.sha }}.tar
+          docker load --input /tmp/image-build/${IMAGE_TAR}
       - name: Scan container image and create reports
         run: |
           mkdir -p artifacts
-          trivy image secure-app:${{ github.sha }} \
+          trivy image "${IMAGE_TAG}" \
             --format json \
             --output artifacts/vulnerability-scan.json \
             --ignore-unfixed \
@@ -193,7 +205,7 @@ jobs:
           PY
       - name: Generate SBOM (CycloneDX)
         run: |
-          trivy image secure-app:${{ github.sha }} \
+          trivy image "${IMAGE_TAG}" \
             --format cyclonedx \
             --output artifacts/sbom.cdx.json \
             --no-progress
@@ -203,7 +215,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: container-security-${{ github.sha }}
-          path: artifacts/
+          path: |
+            artifacts/vulnerability-scan.json
+            artifacts/vulnerability-scan-summary.txt
+            artifacts/sbom.cdx.json
+            artifacts/image-identifier.txt
 
   trusted-build:
     name: Mark trusted build
@@ -225,8 +241,8 @@ jobs:
             "repository": "${GITHUB_REPOSITORY}",
             "commit_sha": "${GITHUB_SHA}",
             "image_identifier": "${image_identifier}",
-            "sbom": "sbom.cdx.json",
-            "vulnerability_summary": "vulnerability-scan-summary.txt",
+            "sbom_artifact_path": "container-security-${GITHUB_SHA}/sbom.cdx.json",
+            "vulnerability_summary_artifact_path": "container-security-${GITHUB_SHA}/vulnerability-scan-summary.txt",
             "marked_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           }
           EOF
